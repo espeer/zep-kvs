@@ -100,11 +100,14 @@ pub mod error;
 
 mod ephemeral;
 
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "windows"))]
 mod directory;
 
 #[cfg(target_os = "linux")]
 mod linux;
+
+#[cfg(target_os = "macos")]
+mod macos;
 
 #[cfg(target_os = "windows")]
 mod windows;
