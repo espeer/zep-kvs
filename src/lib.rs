@@ -106,6 +106,9 @@ mod directory;
 #[cfg(target_os = "linux")]
 mod linux;
 
+#[cfg(target_os = "windows")]
+mod windows;
+
 mod tests;
 
 /// Re-exports of commonly used types and traits.
