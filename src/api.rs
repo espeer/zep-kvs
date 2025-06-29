@@ -1,6 +1,7 @@
 //! Core API for the Zep Key-Value Store library.
 //!
 //! This module provides the main interfaces for storing and retrieving data
+//! across different scopes (User, Machine, Ephemeral) on various platforms.
 
 use std::convert::AsRef;
 
@@ -34,12 +35,18 @@ pub mod scope {
 
     /// System-wide storage shared across all users.
     ///
+    /// On Unix systems, this typically requires root privileges.
+    /// On Windows, this requires administrator privileges.
     /// Data stored in this scope is available to all users of the system.
     pub struct Machine();
 
     /// User-specific storage that persists between program runs.
     ///
-    /// Data is stored in the current user's profile.
+    /// Data is stored in the current user's profile directory
+    /// following platform conventions:
+    /// - Linux: `$XDG_DATA_HOME` or `~/.local/share`
+    /// - macOS: `~/Library/Application Support`
+    /// - Windows: `HKEY_CURRENT_USER\Software`
     pub struct User();
 }
 
@@ -47,6 +54,28 @@ pub mod scope {
 ///
 /// This is the main interface for storing and retrieving data. The generic
 /// parameter `S` determines the storage scope (User, Machine, or Ephemeral).
+///
+/// # Examples
+///
+/// ```
+/// use zep_kvs::prelude::*;
+///
+/// // Create a user-scoped store
+/// let mut store = KeyValueStore::<scope::User>::new()?;
+///
+/// // Store some data
+/// store.store("name", "alice")?;
+/// store.store("count", 42u32)?;
+///
+/// // Retrieve data
+/// let username: String = store.retrieve("name")?.unwrap();
+/// let count: u32 = store.retrieve("count")?.unwrap();
+///
+/// // Remove data
+/// store.remove("name")?;
+/// store.remove("count")?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct KeyValueStore<S: Scope> {
     inner: S::Store,
 }
@@ -56,7 +85,17 @@ impl<S: Scope> KeyValueStore<S> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the storage backend cannot be initialized.
+    /// Returns an error if the storage backend cannot be initialized,
+    /// typically due to permission issues or missing directories.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zep_kvs::prelude::*;
+    ///
+    /// let store = KeyValueStore::<scope::Ephemeral>::new()?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn new() -> Result<Self, KvsError> {
         Ok(Self { inner: S::new()? })
     }
@@ -66,6 +105,22 @@ impl<S: Scope> KeyValueStore<S> {
     /// # Errors
     ///
     /// Returns an error if the storage backend cannot be accessed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zep_kvs::prelude::*;
+    ///
+    /// let mut store = KeyValueStore::<scope::Ephemeral>::new()?;
+    /// store.store("key1", "value1")?;
+    /// store.store("key2", "value2")?;
+    ///
+    /// let keys = store.keys()?;
+    /// assert_eq!(keys.len(), 2);
+    /// assert!(keys.contains(&"key1".to_string()));
+    /// assert!(keys.contains(&"key2".to_string()));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn keys(&self) -> Result<Vec<String>, KvsError> {
         self.inner.keys()
     }
@@ -74,7 +129,7 @@ impl<S: Scope> KeyValueStore<S> {
     ///
     /// If the key already exists, its value will be overwritten.
     /// The value can be any type that implements `OutBytes`, including
-    /// strings and byte arrays.
+    /// strings, integers, and byte arrays.
     ///
     /// # Arguments
     ///
@@ -86,6 +141,20 @@ impl<S: Scope> KeyValueStore<S> {
     ///
     /// Returns an error if the value cannot be serialized or if the
     /// storage backend fails to write the data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zep_kvs::prelude::*;
+    ///
+    /// let mut store = KeyValueStore::<scope::Ephemeral>::new()?;
+    ///
+    /// // Store different types
+    /// store.store("name", "Alice")?;
+    /// store.store("age", 30u32)?;
+    /// store.store("data", vec![1u8, 2u8, 3u8].as_slice())?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn store<K: AsRef<str>, V: OutBytes>(&mut self, key: K, value: V) -> Result<(), KvsError> {
         self.inner.store(key.as_ref(), &value.out_bytes()?)
     }
@@ -107,6 +176,24 @@ impl<S: Scope> KeyValueStore<S> {
     ///
     /// Returns an error if the storage backend fails to read the data
     /// or if the stored data cannot be deserialized to the requested type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zep_kvs::prelude::*;
+    ///
+    /// let mut store = KeyValueStore::<scope::Ephemeral>::new()?;
+    /// store.store("count", 42u32)?;
+    ///
+    /// // Retrieve with explicit type annotation
+    /// let count: u32 = store.retrieve("count")?.unwrap();
+    /// assert_eq!(count, 42);
+    ///
+    /// // Check for non-existent key
+    /// let missing: Option<String> = store.retrieve("missing")?;
+    /// assert!(missing.is_none());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn retrieve<K: AsRef<str>, V: InBytes>(&self, key: K) -> Result<Option<V>, KvsError> {
         Ok(match self.inner.retrieve(key.as_ref())? {
             Some(data) => Some(V::in_bytes(&data)?),
@@ -125,6 +212,20 @@ impl<S: Scope> KeyValueStore<S> {
     /// # Errors
     ///
     /// Returns an error if the storage backend fails to remove the key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zep_kvs::prelude::*;
+    ///
+    /// let mut store = KeyValueStore::<scope::Ephemeral>::new()?;
+    /// store.store("temp", "value")?;
+    ///
+    /// assert!(store.retrieve::<_, String>("temp")?.is_some());
+    /// store.remove("temp")?;
+    /// assert!(store.retrieve::<_, String>("temp")?.is_none());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn remove<K: AsRef<str>>(&mut self, key: K) -> Result<(), KvsError> {
         self.inner.remove(key.as_ref())
     }

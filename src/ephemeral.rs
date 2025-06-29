@@ -22,6 +22,18 @@ impl Scope for Ephemeral {
 /// This store keeps all data in memory and provides fast access
 /// to stored values. Data is not persisted and will be lost when
 /// the store is dropped.
+///
+/// # Examples
+///
+/// ```
+/// use zep_kvs::prelude::*;
+///
+/// let mut store = KeyValueStore::<scope::Ephemeral>::new()?;
+/// store.store("test", "value")?;
+/// let value: String = store.retrieve("test")?.unwrap();
+/// assert_eq!(value, "value");
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct EphemeralStore {
     store: HashMap<String, Vec<u8>>,
 }
