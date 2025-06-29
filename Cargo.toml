@@ -1,0 +1,13 @@
+[package]
+name = "zep-kvs"
+description = "Elementary zero config cross platform key-value persistence library"
+keywords = ["kvs", "key", "value", "store", "persistence", "state"]
+repository = "https://github.com/espeer/zep-kvs"
+categories = ["config", "filesystem", "os"]
+authors = [ "Edwin Peer <espeer@gmail.com>" ]
+license = "BSD-2-Clause"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = "2.0"
