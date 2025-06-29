@@ -4,6 +4,12 @@ pub mod error;
 
 mod ephemeral;
 
+#[cfg(target_os = "linux")]
+mod directory;
+
+#[cfg(target_os = "linux")]
+mod linux;
+
 mod tests;
 
 pub mod prelude {

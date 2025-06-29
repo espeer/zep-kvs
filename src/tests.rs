@@ -44,6 +44,19 @@ fn can_retrieve_keys() {
     assert!(keys.contains(&String::from("hij")));
     assert_eq!(keys.len(), 3);
 }
+/// Test user scope storage functionality.
+///
+/// Verifies that the user scope can store, retrieve, and remove data
+/// correctly. Also tests that non-existent keys return None.
+#[test]
+fn can_store_user_scope() {
+    let mut user = KeyValueStore::<scope::User>::new().unwrap();
+    user.store("foo", "bar").unwrap();
+    assert!(user.keys().unwrap().contains(&String::from("foo")));
+    assert_eq!(user.retrieve("foo").unwrap(), Some("bar".to_owned()));
+    assert_eq!(user.retrieve::<_, String>("baz").unwrap(), None);
+    user.remove("foo").unwrap();
+}
 
 /// Test key removal functionality.
 ///
@@ -315,4 +328,308 @@ fn can_store_and_retrieve_primitive_types() {
         store.retrieve::<&str, f64>("f64_val").unwrap(),
         Some(2.718281828459045f64)
     );
+}
+
+/// Verifies that data stored in user scope persists when the store
+/// is dropped and recreated, confirming backing store persistence.
+#[test]
+fn user_scope_persists_across_instances() {
+    let test_key = "user_persistence_test";
+    let test_value = "persistent_data";
+
+    // Store data in first instance
+    {
+        let mut store = KeyValueStore::<scope::User>::new().unwrap();
+        store.store(test_key, test_value).unwrap();
+    }
+
+    // Verify data persists in second instance
+    {
+        let store = KeyValueStore::<scope::User>::new().unwrap();
+        assert_eq!(
+            store.retrieve(test_key).unwrap(),
+            Some(String::from(test_value))
+        );
+    }
+
+    // Clean up
+    {
+        let mut store = KeyValueStore::<scope::User>::new().unwrap();
+        store.remove(test_key).unwrap();
+    }
+}
+
+/// Verifies that user scope can handle all primitive types
+#[test]
+fn user_scope_handles_primitive_types() {
+    let mut store = KeyValueStore::<scope::User>::new().unwrap();
+
+    // Test a representative sample of primitive types
+    store.store("user_bool", true).unwrap();
+    store.store("user_i32", 42i32).unwrap();
+    store.store("user_u64", 1234567890u64).unwrap();
+    store.store("user_f64", 3.14159f64).unwrap();
+    store.store("user_char", '🔥').unwrap();
+
+    assert_eq!(
+        store.retrieve::<&str, bool>("user_bool").unwrap(),
+        Some(true)
+    );
+    assert_eq!(
+        store.retrieve::<&str, i32>("user_i32").unwrap(),
+        Some(42i32)
+    );
+    assert_eq!(
+        store.retrieve::<&str, u64>("user_u64").unwrap(),
+        Some(1234567890u64)
+    );
+    assert_eq!(
+        store.retrieve::<&str, f64>("user_f64").unwrap(),
+        Some(3.14159f64)
+    );
+    assert_eq!(
+        store.retrieve::<&str, char>("user_char").unwrap(),
+        Some('🔥')
+    );
+
+    // Clean up
+    store.remove("user_bool").unwrap();
+    store.remove("user_i32").unwrap();
+    store.remove("user_u64").unwrap();
+    store.remove("user_f64").unwrap();
+    store.remove("user_char").unwrap();
+}
+
+/// Verifies that user scope can handle binary data, empty values,
+/// and special characters in keys.
+#[test]
+fn user_scope_handles_binary_and_edge_cases() {
+    let mut store = KeyValueStore::<scope::User>::new().unwrap();
+
+    // Test binary data with null bytes
+    let binary_data = vec![0u8, 255u8, 127u8, 1u8, 0u8, 0u8, 42u8];
+    store.store("user_binary", binary_data.as_slice()).unwrap();
+    assert_eq!(store.retrieve("user_binary").unwrap(), Some(binary_data));
+
+    // Test empty values
+    store.store("user_empty", "").unwrap();
+    assert_eq!(
+        store.retrieve("user_empty").unwrap(),
+        Some(String::from(""))
+    );
+
+    // Test special characters in keys
+    store.store("user-key.test", "special_key_value").unwrap();
+    assert_eq!(
+        store.retrieve("user-key.test").unwrap(),
+        Some(String::from("special_key_value"))
+    );
+
+    // Clean up
+    store.remove("user_binary").unwrap();
+    store.remove("user_empty").unwrap();
+    store.remove("user-key.test").unwrap();
+}
+
+/// Test user scope key operations (overwrite, remove, list).
+#[test]
+fn user_scope_key_operations() {
+    let mut store = KeyValueStore::<scope::User>::new().unwrap();
+
+    // Test overwriting
+    store.store("user_overwrite", "original").unwrap();
+    store.store("user_overwrite", "updated").unwrap();
+    assert_eq!(
+        store.retrieve("user_overwrite").unwrap(),
+        Some(String::from("updated"))
+    );
+
+    // Test key listing
+    store.store("user_key1", "value1").unwrap();
+    store.store("user_key2", "value2").unwrap();
+    let keys = store.keys().unwrap();
+    assert!(keys.contains(&String::from("user_overwrite")));
+    assert!(keys.contains(&String::from("user_key1")));
+    assert!(keys.contains(&String::from("user_key2")));
+
+    // Test removal
+    store.remove("user_key1").unwrap();
+    let keys_after_remove = store.keys().unwrap();
+    assert!(!keys_after_remove.contains(&String::from("user_key1")));
+    assert!(keys_after_remove.contains(&String::from("user_key2")));
+
+    // Test retrieval after removal
+    assert_eq!(store.retrieve::<_, String>("user_key1").unwrap(), None);
+    assert_eq!(
+        store.retrieve("user_key2").unwrap(),
+        Some(String::from("value2"))
+    );
+
+    // Clean up
+    store.remove("user_overwrite").unwrap();
+    store.remove("user_key2").unwrap();
+}
+
+/// Verifies that user scope properly handles Unicode data
+#[test]
+fn user_scope_handles_unicode() {
+    let mut store = KeyValueStore::<scope::User>::new().unwrap();
+
+    let unicode_strings = [
+        "Hello, 世界!",
+        "🚀🌟💫",
+        "Ñoño",
+        "Москва",
+        "مرحبا",
+        "こんにちは",
+    ];
+
+    // Store all Unicode strings
+    for (i, s) in unicode_strings.iter().enumerate() {
+        let key = format!("user_unicode_{}", i);
+        store.store(&key, *s).unwrap();
+    }
+
+    // Verify all Unicode strings are retrieved correctly
+    for (i, expected) in unicode_strings.iter().enumerate() {
+        let key = format!("user_unicode_{}", i);
+        let retrieved: String = store.retrieve(&key).unwrap().unwrap();
+        assert_eq!(retrieved, *expected);
+    }
+
+    // Clean up
+    for i in 0..unicode_strings.len() {
+        let key = format!("user_unicode_{}", i);
+        store.remove(&key).unwrap();
+    }
+}
+
+/// Verifies that user scope maintains data consistency across
+/// multiple store, retrieve, and remove operations.
+#[test]
+fn user_scope_data_consistency() {
+    let mut store = KeyValueStore::<scope::User>::new().unwrap();
+
+    // Perform multiple operations to test consistency
+    let operations = [
+        ("consistency_1", "value_1"),
+        ("consistency_2", "value_2"),
+        ("consistency_3", "value_3"),
+    ];
+
+    // Store all values
+    for (key, value) in &operations {
+        store.store(*key, *value).unwrap();
+    }
+
+    // Verify all values are stored
+    for (key, expected_value) in &operations {
+        assert_eq!(
+            store.retrieve(*key).unwrap(),
+            Some(String::from(*expected_value))
+        );
+    }
+
+    // Update some values
+    store.store("consistency_1", "updated_value_1").unwrap();
+    store.store("consistency_3", "updated_value_3").unwrap();
+
+    // Verify updates
+    assert_eq!(
+        store.retrieve("consistency_1").unwrap(),
+        Some(String::from("updated_value_1"))
+    );
+    assert_eq!(
+        store.retrieve("consistency_2").unwrap(),
+        Some(String::from("value_2"))
+    );
+    assert_eq!(
+        store.retrieve("consistency_3").unwrap(),
+        Some(String::from("updated_value_3"))
+    );
+
+    // Remove one key
+    store.remove("consistency_2").unwrap();
+
+    // Verify removal
+    assert_eq!(store.retrieve::<_, String>("consistency_2").unwrap(), None);
+    assert_eq!(
+        store.retrieve("consistency_1").unwrap(),
+        Some(String::from("updated_value_1"))
+    );
+    assert_eq!(
+        store.retrieve("consistency_3").unwrap(),
+        Some(String::from("updated_value_3"))
+    );
+
+    // Clean up
+    store.remove("consistency_1").unwrap();
+    store.remove("consistency_3").unwrap();
+}
+
+/// Verifies that Ephemeral and User scopes maintain separate data
+/// and that operations on one scope don't affect the other.
+#[test]
+fn storage_scopes_are_independent() {
+    let mut ephemeral_store = KeyValueStore::<scope::Ephemeral>::new().unwrap();
+    let mut user_store = KeyValueStore::<scope::User>::new().unwrap();
+
+    // Store same key with different values in each scope
+    ephemeral_store
+        .store("scope_test", "ephemeral_value")
+        .unwrap();
+    user_store.store("scope_test", "user_value").unwrap();
+
+    // Verify each scope has its own value
+    assert_eq!(
+        ephemeral_store.retrieve("scope_test").unwrap(),
+        Some(String::from("ephemeral_value"))
+    );
+    assert_eq!(
+        user_store.retrieve("scope_test").unwrap(),
+        Some(String::from("user_value"))
+    );
+
+    // Store additional keys in each scope
+    ephemeral_store
+        .store("ephemeral_only", "ephemeral_data")
+        .unwrap();
+    user_store.store("user_only", "user_data").unwrap();
+
+    // Verify scope isolation - each scope only sees its own keys
+    let ephemeral_keys = ephemeral_store.keys().unwrap();
+    let user_keys = user_store.keys().unwrap();
+
+    assert!(ephemeral_keys.contains(&String::from("scope_test")));
+    assert!(ephemeral_keys.contains(&String::from("ephemeral_only")));
+    assert!(!ephemeral_keys.contains(&String::from("user_only")));
+
+    assert!(user_keys.contains(&String::from("scope_test")));
+    assert!(user_keys.contains(&String::from("user_only")));
+    assert!(!user_keys.contains(&String::from("ephemeral_only")));
+
+    // Verify cross-scope key retrieval returns None
+    assert_eq!(
+        ephemeral_store.retrieve::<_, String>("user_only").unwrap(),
+        None
+    );
+    assert_eq!(
+        user_store.retrieve::<_, String>("ephemeral_only").unwrap(),
+        None
+    );
+
+    // Remove key from one scope, verify it doesn't affect the other
+    ephemeral_store.remove("scope_test").unwrap();
+    assert_eq!(
+        ephemeral_store.retrieve::<_, String>("scope_test").unwrap(),
+        None
+    );
+    assert_eq!(
+        user_store.retrieve("scope_test").unwrap(),
+        Some(String::from("user_value"))
+    );
+
+    // Clean up user scope (ephemeral scope cleans up automatically)
+    user_store.remove("scope_test").unwrap();
+    user_store.remove("user_only").unwrap();
 }
