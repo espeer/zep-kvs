@@ -1,7 +1,7 @@
 [package]
 name = "zep-kvs"
 description = "Elementary zero config cross platform key-value persistence library"
-keywords = ["kvs", "key", "value", "store", "persistence", "state"]
+keywords = ["kvs", "key", "value", "store", "state"]
 repository = "https://github.com/espeer/zep-kvs"
 categories = ["config", "filesystem", "os"]
 authors = [ "Edwin Peer <espeer@gmail.com>" ]
