@@ -3830,7 +3830,7 @@ dependencies = [
 
 [[package]]
 name = "zep-kvs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cargo",
  "rand 0.9.1",

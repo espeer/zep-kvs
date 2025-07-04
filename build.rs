@@ -19,6 +19,9 @@ use std::env;
 /// The `ZEP_KVS_APP_NAME` variable is used throughout the library to create
 /// platform-appropriate storage paths.
 fn main() {
+    #[cfg(not(target_os = "windows"))]
+    let pwd = std::path::PathBuf::from(env!("PWD"));
+    #[cfg(target_os = "windows")]
     let pwd = env::current_dir().unwrap();
     let pkg = PathSource::new(
         &pwd,
