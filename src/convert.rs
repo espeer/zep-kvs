@@ -226,8 +226,8 @@ impl InBytes for isize {
                 "Invalid isize byte length".to_string(),
             ));
         }
-        let mut arr = [0u8; 8];
-        arr[..bytes.len()].copy_from_slice(bytes);
+        let mut arr = [0u8; std::mem::size_of::<isize>()];
+        arr.copy_from_slice(bytes);
         Ok(isize::from_be_bytes(arr))
     }
 }
@@ -337,8 +337,8 @@ impl InBytes for usize {
                 "Invalid usize byte length".to_string(),
             ));
         }
-        let mut arr = [0u8; 8];
-        arr[..bytes.len()].copy_from_slice(bytes);
+        let mut arr = [0u8; std::mem::size_of::<usize>()];
+        arr.copy_from_slice(bytes);
         Ok(usize::from_be_bytes(arr))
     }
 }
